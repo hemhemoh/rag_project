@@ -10,51 +10,41 @@ from langchain.chains.history_aware_retriever import create_history_aware_retrie
 from langchain_cohere import ChatCohere, CohereEmbeddings
 from langchain_core.prompts import MessagesPlaceholder
 from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.prompts import ChatPromptTemplate
-
+from langchain.prompts import ChatPromptTemplate, PromptTemplate
+from langchain.chains import LLMChain
 from dotenv import load_dotenv
 import feedparser, faiss, json, os
 from urllib.parse import quote
-
+from PyPDF2 import PdfReader
 load_dotenv()
 
-class ArxivModel():
+class PDFModel():
     def __init__(self):
         self.embedding_model = CohereEmbeddings(model="embed-english-light-v3.0")
         self.chat_model = ChatCohere(model="command-light",temperature=0.1,max_tokens=1000,top_p=0.9,)
         self.store = {}
         # TODO: make this dynamic for new sessions via the app
         self.session_config = {"configurable": {"session_id": "0"}}
-        self.documents = []
-        
-    def fetch_arxiv_papers(self, keywords):
-        quoted_keywords = [quote(kw) for kw in keywords]
-        query = "+AND+".join(
-            [f"abs:{quote(keyword)}" for keyword in quoted_keywords])
-        url = (f'http://export.arxiv.org/api/query?search_query={query}'
-            f'&start=0&max_results=50&sortBy=lastUpdatedDate&sortOrder=descending')
-        self.data = feedparser.parse(url)
     
-    def create_documents(self):
-        for paper in self.data.entries:
-            title = paper["title"]
-            link = paper["title"]
-            abstract = paper["summary"]
-            paper_content =  f"Title: {title}\nAbstract: {abstract}"
-            paper_content = paper_content.lower()
-            self.documents.append(Document(page_content=paper_content, metadata={"link":link}))
-    
+    def extract_uploaded_pdf(self, uploaded_files):
+        self.text = ""
+        for pdf in uploaded_files:
+            pdf_reader = PdfReader(pdf)
+            for page in pdf_reader.pages:
+                self.text += page.extract_text()
+
     def load_json(self, file_path):
         with open(file_path, "r") as f:
             data = json.load(f)
         return data
     
     def create_retriever(self):
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        all_splits = text_splitter.split_text(self.text)
+
         index = faiss.IndexFlatL2(
             len(self.embedding_model.embed_query("Hello LLM")))
         
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-        all_splits = text_splitter.split_documents(self.documents)
         vector_db = FAISS(
             embedding_function=self.embedding_model,
             index=index,
@@ -62,7 +52,7 @@ class ArxivModel():
             index_to_docstore_id={},
         )
 
-        vector_db.add_documents(all_splits)
+        vector_db.add_texts(all_splits)
 
         self.retriever = vector_db.as_retriever()
         
@@ -123,25 +113,22 @@ class ArxivModel():
             output_messages_key="answer")
         return conversational_rag_chain
     
-    def get_model(self, keywords):
-        self.fetch_arxiv_papers(keywords)
-        self.create_documents()
+    def get_pdf_model(self, uploaded_files):
+        self.extract_uploaded_pdf(uploaded_files)
         self.create_retriever()
         conversational_rag_chain = self.create_conversational_rag_chain()
         return conversational_rag_chain
     
 
 if __name__ == "__main__":
-    arxiv_model = ArxivModel()
-
-    keyword = ["RAG", "Multimodal AI"]
-
-    llm_chain = arxiv_model.get_model(keyword)
-
-    response = llm_chain.invoke({"input": "Tell me about Multimodal AI"})
+    pdf_model = PDFModel()
+    query = "Tell me about Multimodal AI"
+    file_path = ["A list of different pdf research papers"]
+    llm_chain = pdf_model.get_pdf_model(file_path)
+    response = llm_chain.invoke({"input": query}, config=pdf_model.session_config)
     print(response["answer"])
 
-    for chunk in llm_chain.stream("What is LLM?"):
+    for chunk in llm_chain.stream(query):
         print(chunk, end="", flush=True)
         
     
