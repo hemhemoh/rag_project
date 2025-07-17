@@ -1,7 +1,9 @@
-unstructured
-tiktoken
-pinecone-client
 pypdf
-openai
 langchain
 python-dotenv
+streamlit
+langchain_community
+langchain_cohere
+adapters
+feedparser
+faiss-cpu
