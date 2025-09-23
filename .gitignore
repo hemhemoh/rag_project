@@ -2,3 +2,4 @@
 .vscode/
 papers/
 utils/
+qdrant_storage/

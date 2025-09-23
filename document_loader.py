@@ -41,8 +41,7 @@ class DocumentLoader:
         """Fetch papers from ArXiv based on keywords with configurable count and Create documents from ArXiv papers"""
         quoted_keywords = [quote(kw) for kw in keywords[:3]]
         query = "+AND+".join([f"abs:{quote(keyword)}" for keyword in quoted_keywords])
-        url = (f'http://export.arxiv.org/api/query?search_query={query}'
-            f'&start=0&max_results={max_results}&sortBy=lastUpdatedDate&sortOrder=descending')
+        url = (f'http://export.arxiv.org/api/query?search_query={query}&start=0&max_results={max_results}&sortBy=lastUpdatedDate&sortOrder=descending')
         self.data = feedparser.parse(url)
         for paper in self.data.entries:
             try:
@@ -50,6 +49,13 @@ class DocumentLoader:
                 pdf_url = link.replace("/abs/", "/pdf/")
                 loader = DoclingLoader(file_path=pdf_url, export_type=ExportType.MARKDOWN)
                 extracted_docs = loader.load()
+                title = paper.get("title")
+                authors = [a.get("name") for a in paper.get("authors", [])]
+                published = paper.get("published")
+                for d in extracted_docs:
+                    d.metadata["title"] = title
+                    d.metadata["authors"] = authors
+                    d.metadata["published"] = published
                 self.documents.extend(extracted_docs)
             except Exception as e:
                 print(f"Error processing paper {link}: {str(e)}")

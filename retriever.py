@@ -9,7 +9,7 @@ from langchain.chains.retrieval import create_retrieval_chain
 
 class Retriever:
     def __init__(self, get_prompt, get_session_history, vector_store: VectorStore, k=5):
-        self.retriever = vector_store.document_indexing.as_retriever(search_type="similarity", search_kwargs={"k": k})
+        self.retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": k})
         self.chat_model = ChatCohere(model="command-r-plus", temperature=0.1, max_tokens=1000, top_p=0.9)
         self.get_prompt = get_prompt
         self.get_session_history = get_session_history
